@@ -536,7 +536,7 @@ class Seed:
 pygame.init()
 
 screen_width = 800
-screen_height = 400
+screen_height = 500
 
 screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("test")
@@ -592,7 +592,7 @@ def reset(level=1):
         "asc": 0
     }
 try:
-    with open("idle_save", "rb") as f:
+    with open("save_idle_game_idk", "rb") as f:
         save = pickle.load(f)
     seed = save["seed"]
     m=save["m"]
@@ -608,6 +608,8 @@ try:
     draws=save["draws"]
     draw_mult=save["draw_mult"]
     draw_exponent=save["draw_exponent"]
+    nb_card_rarity=save["nb_card_rarity"]
+    max_card_level = save["max_card_level"]
 
 except FileNotFoundError:
     print("noFilesFound Starting a new save")
@@ -636,6 +638,8 @@ except FileNotFoundError:
     draws = 0
     draw_mult = 1
     draw_exponent = 2
+    nb_card_rarity = {"common":0, "uncommon":0, "rare":0, "epic":0, "legendary":0}
+    max_card_level = 0
     reset(999)
 #cards
 level_up_requirement = [1, 2, 4, 6, 8, 10, 14, 21, 30, 40] #then loops every 10 levels and multiplie by 50
@@ -681,12 +685,12 @@ cards = {
         },
     "epic":{
         "cards":[
-            "exponential gain", # m+ +^0.02/lvl
+            "exponential gain", # m+ +^0.04/lvl
             "fast start", # t gain is x(5x5^lvl) and then gets divided by t^0.5 (min 1x)
             "weaker inflation", # add x1.1 (+0.1x/lvl) to asc cost exponent divider
         ],
         "cards values":[
-            [BigNum(0), 0.02, "+"],
+            [BigNum(0), 0.04, "+"],
             [BigNum(5), 5, "x"],
             [BigNum(1), 0.1, "+"]
         ],
@@ -694,12 +698,12 @@ cards = {
     },
     "legendary":{
         "cards":[
-            "exponential ascension", # u1 +^0.01/asc (+0.005/lvl after lvl 1)
+            "exponential ascension", # u1 +^0.01/asc +^0.01/lvl
             "crazy scaling", # u2 mult/20levels is now multiplicative instead of additive but ^0.5 (power isn't applied if lvl<200) and counts each ascensions as 100 lvl for this effect +^0.1/lvl
             "base upgrading" # base increases by (u3["lvl"]^(0.16+0.04*lvl))/25 and counts each ascensions as 100 lvl for this effect
         ],
         "cards values":[
-            [BigNum(0.005), 0.005, "+"],
+            [BigNum(0.01), 0.01, "+"],
             [BigNum(0.4), 0.1, "+"],
             [BigNum(0.16), 0.04, "+"]
         ],
@@ -707,25 +711,42 @@ cards = {
     }
 }
 
-def draw():
-    global owned_cards
-    r = seed.random()
-    for rarity in cards.values():
-        if r<=rarity["proba"]:
-            c = seed.randint(0,len(rarity["cards"])-1)
-            card = rarity["cards"][c]
-            card_value = rarity["cards values"][c]
-            break
-        else:
-            r-=rarity["proba"]
-    owned_cards[card]["exp"]+=1
-    if owned_cards[card]["exp"]>=level_up_requirement[owned_cards[card]["lvl"]%10]:
-        owned_cards[card]["exp"]-=level_up_requirement[owned_cards[card]["lvl"]%10]
-        owned_cards[card]["lvl"]+=1
-        if card_value[2]=="+":
-            owned_cards[card]["value"]=card_value[0]+card_value[1]*owned_cards[card]["lvl"]
-        else:
-            owned_cards[card]["value"]=card_value[0]*card_value[1]**owned_cards[card]["lvl"]
+def draw(nb_draws=BigNum(1)):
+    global owned_cards,max_card_level
+
+    if nb_draws>1000:
+        mult=nb_draws/1000
+        nb_draws=1000
+    else:
+        
+        mult=1+(nb_draws.to_float()%1)/(nb_draws.to_float()//1)
+
+    for _ in range(int(nb_draws.to_float()//1)): 
+        r = seed.random()
+        for rarity in cards.values():
+            if r<=rarity["proba"]:
+                c = seed.randint(0,len(rarity["cards"])-1)
+                card = rarity["cards"][c]
+                card_value = rarity["cards values"][c]
+                if owned_cards[card]["lvl"]==0:
+                        nb_card_rarity[rarity]+=1
+                break
+            else:
+                r-=rarity["proba"]
+        owned_cards[card]["exp"]+=BigNum(1)*mult
+        requirement=level_up_requirement[owned_cards[card]["lvl"]%10]*BigNum(50)**(owned_cards[card]["lvl"]//10)
+
+        if owned_cards[card]["exp"]>=requirement:
+            owned_cards[card]["exp"]-=requirement
+            owned_cards[card]["lvl"]+=1
+
+            if owned_cards[card]["lvl"]>max_card_level:
+                max_card_level = owned_cards[card]["lvl"]
+
+            if card_value[2]=="+":
+                owned_cards[card]["value"]=card_value[0]+card_value[1]*owned_cards[card]["lvl"]
+            else:
+                owned_cards[card]["value"]=card_value[0]*card_value[1]**owned_cards[card]["lvl"]
     return card
 
 last_drawn_card=None
@@ -735,6 +756,7 @@ u2_rect = pygame.Rect(0, 216, 300, 20)
 u3_rect = pygame.Rect(0, 236, 300, 20)
 menu = 0
 running = True
+
 while running:
     mouse = pygame.mouse.get_pos()
     keys = pygame.key.get_pressed()
@@ -773,11 +795,11 @@ while running:
                         u2["level"]+=1
                         m-=u2["cost"]
                         if owned_cards["crazy scaling"]["lvl"]>0:
-                            u2["value"] = (1+(BigNum(u2["level"])*0.1))*(u2["mult"]*(u2["mult/20levels"]+owned_cards["faster scaling"]["value"])**(u2["level"]//20+u2["asc"]*5))*(5*owned_cards["ascend more"]["value"])**u2["asc"]
+                            u2["value"] = (1+(BigNum(u2["level"])*0.1))*(u2["mult"]*(1+u2["mult/20levels"]+owned_cards["faster scaling"]["value"])**(1+u2["level"]//20+u2["asc"]*5))*(5*owned_cards["ascend more"]["value"])**u2["asc"]
                         elif owned_cards["faster scaling"]["lvl"]>0:
-                            u2["value"] = (1+(BigNum(u2["level"])*0.1))*(u2["mult"]+(u2["mult/20levels"]+owned_cards["faster scaling"]["value"])*(u2["level"]//20+u2["asc"]*5))*(5*owned_cards["ascend more"]["value"])**u2["asc"]
+                            u2["value"] = (1+(BigNum(u2["level"])*0.1))*(u2["mult"]+(u2["mult/20levels"]+owned_cards["faster scaling"]["value"])*(1+u2["level"]//20+u2["asc"]*5))*(5*owned_cards["ascend more"]["value"])**u2["asc"]
                         else:
-                            u2["value"] = (1+(BigNum(u2["level"])*0.1))*(u2["mult"]+u2["mult/20levels"]*(u2["level"]//20))*(5*owned_cards["ascend more"]["value"])**u2["asc"]
+                            u2["value"] = (1+(BigNum(u2["level"])*0.1))*(u2["mult"]+u2["mult/20levels"]*(1+u2["level"]//20))*(5*owned_cards["ascend more"]["value"])**u2["asc"]
                         if u2["level"]<20 or u2["asc"]<1:
                             u2["cost"] = (BigNum(u2["level"]**2)*10+100)**(1+u2["asc"]/10)**2*5**u2["asc"]
                         else:
@@ -972,7 +994,7 @@ while running:
         if achievments == 10:
             screen.blit(font.render(f"objective: get all common cards", True, white), (300,0))
             screen.blit(font.render(f"reward: x2 to draw gain", True, white), (300,30))
-            if owned_cards["wait faster"]["lvl"]>=1 and owned_cards["better power"]["lvl"]>=1 and owned_cards["better power"]["lvl"]>=1:
+            if nb_card_rarity["common"]==3:
                 screen.blit(font.render(f"press enter to get reward", True, white), (300,90))
                 if keys[pygame.K_RETURN]:
                     if not holding_enter:
@@ -984,7 +1006,7 @@ while running:
         if achievments == 11:
             screen.blit(font.render(f"objective: get all uncommon cards", True, white), (300,0))
             screen.blit(font.render(f"reward: x1.5 to draw gain", True, white), (300,30))
-            if owned_cards["faster scaling"]["lvl"]>=1 and owned_cards["flat mult"]["lvl"]>=1 and owned_cards["time acceleration"]["lvl"]>=1:
+            if nb_card_rarity["uncommon"]==3:
                 screen.blit(font.render(f"press enter to get reward", True, white), (300,90))
                 if keys[pygame.K_RETURN]:
                     if not holding_enter:
@@ -996,7 +1018,7 @@ while running:
         if achievments == 12:
             screen.blit(font.render(f"objective: get a legendary", True, white), (300,0))
             screen.blit(font.render(f"reward: base card gain ^1.1", True, white), (300,30))
-            if owned_cards["exponential ascension"]["lvl"]>=1 or owned_cards["crazy scaling"]["lvl"]>=1 or owned_cards["base upgrading"]["lvl"]>=1:
+            if nb_card_rarity["legendary"]==1:
                 screen.blit(font.render(f"press enter to get reward", True, white), (300,90))
                 if keys[pygame.K_RETURN]:
                     if not holding_enter:
@@ -1005,7 +1027,20 @@ while running:
                         holding_enter = True
                 else:
                     holding_enter = False
+        if achievments == 13:
+            screen.blit(font.render(f"objective: get a level 9 card", True, white), (300,0))
+            screen.blit(font.render(f"reward: draw max (m)", True, white), (300,30))
+            if max_card_level == 9:
+                screen.blit(font.render(f"press enter to get reward", True, white), (300,90))
+                if keys[pygame.K_RETURN]:
+                    if not holding_enter:
+                        unlocked.append("draw max")
+                        achievments+=1
+                        holding_enter = True
+                else:
+                    holding_enter = False
     if menu == 2:
+        #prestige
         if m < BigNum("1e20"):
             screen.blit(font.render(f"you need 1e20 m to prestige", True, white), (300,0))
         else:
@@ -1021,12 +1056,26 @@ while running:
                 holding_enter = False
     if menu == 3:
         screen.blit(font.render(f"draws = {draws} (press enter to draw)", True, white), (300,0))
+        if "draw max" in unlocked:
+            screen.blit(font.render(f"press m to use all your draws", True, white), (300,25))
         if last_drawn_card!=None:
-            screen.blit(font.render(f"you got a {last_drawn_card}", True, white), (300,30))
+            screen.blit(font.render(f"you got a {last_drawn_card}", True, white), (300,50))
+
+        screen.blit(font.render(f"common(65%)", True, grey), (0,375))
+        screen.blit(font.render(f"uncommon(20%)", True, green), (0,400))
+        screen.blit(font.render(f"rare(10%)", True, blue), (0,425))
+        screen.blit(font.render(f"epic(4%)", True, magenta), (0,450))
+        screen.blit(font.render(f"legendary(1%)", True, orange), (0,475))
+
         if keys[pygame.K_RETURN] and draws>=1:
             if not holding_enter:
                 draws-=1
                 last_drawn_card=draw()
+                holding_enter = True
+        if keys[pygame.K_m] and draws>=1 and "draw max" in unlocked:
+            if not holding_enter:
+                last_drawn_card=draw(draws)
+                draws=0
                 holding_enter = True
         else:
             holding_enter = False
@@ -1107,7 +1156,9 @@ save = {
         "owned_cards": owned_cards,
         "draws": draws,
         "draw_mult": draw_mult,
-        "draw_exponent":draw_exponent
+        "draw_exponent":draw_exponent,
+        "nb_card_rarity":nb_card_rarity,
+        "max_card_level":max_card_level
     }
-with open("idle_save", "wb") as f:
+with open("save_idle_game_idk", "wb") as f:
     pickle.dump(save, f)
