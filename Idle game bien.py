@@ -562,7 +562,7 @@ def reset(level=1):
         "level": 0,
         "cost": BigNum(0),
         "exp": BigNum(1),
-        "asc": 0
+        "asc": 2
     }
     if achievments >=2:
         u1["exp"]+=0.05
@@ -571,7 +571,7 @@ def reset(level=1):
         "level": 0,
         "cost": BigNum(100),
         "mult": 1,
-        "asc": 0,
+        "asc": 1,
         "mult/20levels":0
     }
     if achievments >= 4:
@@ -591,33 +591,80 @@ def reset(level=1):
         "gain": BigNum(1),
         "asc": 0
     }
+
+#load save
 try:
     with open("save_idle_game_idk", "rb") as f:
         save = pickle.load(f)
+except:
+    print("No files found starting from 0")
+try:
     seed = save["seed"]
-    m=save["m"]
-    max_m = save["max_m"]
-    u1=save["u1"]
-    u2=save["u2"]
-    u3=save["u3"]
-    unlocked = save["unlocked"]
-    achievments = save["achievments"]
-    t = save["t"]
-    unlocked_tabs = save["unlocked_tabs"]
-    owned_cards=save["owned_cards"]
-    draws=save["draws"]
-    draw_mult=save["draw_mult"]
-    draw_exponent=save["draw_exponent"]
-    nb_card_rarity=save["nb_card_rarity"]
-    max_card_level = save["max_card_level"]
-
-except FileNotFoundError:
-    print("noFilesFound Starting a new save")
+except:
     seed = Seed(rand.randint(0,2**32-1))
-    #idle game    
-    unlocked = []
+try:
+    m=save["m"]
+except:
+    m=BigNum(0)
+try:
+    max_m = save["max_m"]
+except:
+    max_m = m
+try:
+    achievments = save["achievments"]
+except:
     achievments = 0
+try:
+    u1=save["u1"]
+except:
+    u1={
+        "value": BigNum(0),
+        "level": 0,
+        "cost": BigNum(0),
+        "exp": BigNum(1),
+        "asc": 2
+    }
+try:
+    u2=save["u2"]
+except:
+    u2={
+        "value": BigNum(1),
+        "level": 0,
+        "cost": BigNum(100),
+        "mult": 1,
+        "asc": 1,
+        "mult/20levels":0
+    }
+try:
+    u3=save["u3"]
+except:
+    u3={
+        "value": BigNum(1),
+        "level": 0,
+        "cost": BigNum(2000),
+        "base": 1.1,
+        "asc": 0
+    }
+try:
+    unlocked = save["unlocked"]
+except:
+    unlocked = []
+try:
+    t = save["t"]
+except:
+    t={
+        "value": BigNum(1),
+        "exp": BigNum(0.3),
+        "gain": BigNum(1),
+        "asc": 0
+    }
+try:
+    unlocked_tabs = save["unlocked_tabs"]
+except:
     unlocked_tabs = 2
+try:
+    owned_cards=save["owned_cards"]
+except:
     owned_cards={
         "wait faster":{"value":0, "lvl":0, "exp":0},
         "better power":{"value":0, "lvl":0, "exp":0},
@@ -635,12 +682,27 @@ except FileNotFoundError:
         "crazy scaling":{"value":0, "lvl":0, "exp":0},
         "base upgrading":{"value":0, "lvl":0, "exp":0},
         }
-    draws = 0
+try:
+    draws=save["draws"]
+except:
+    draws = BigNum(0)
+try:
+    draw_mult=save["draw_mult"]
+except:
     draw_mult = 1
+try:
+    draw_exponent=save["draw_exponent"]
+except:
     draw_exponent = 2
+try:
+    nb_card_rarity=save["nb_card_rarity"]
+except:
     nb_card_rarity = {"common":0, "uncommon":0, "rare":0, "epic":0, "legendary":0}
+try:
+    max_card_level = save["max_card_level"]
+except:
     max_card_level = 0
-    reset(999)
+
 #cards
 level_up_requirement = [1, 2, 4, 6, 8, 10, 14, 21, 30, 40] #then loops every 10 levels and multiplie by 50
 cards = {
@@ -686,12 +748,12 @@ cards = {
     "epic":{
         "cards":[
             "exponential gain", # m+ +^0.04/lvl
-            "fast start", # t gain is x(5x5^lvl) and then gets divided by t^0.5 (min 1x)
+            "fast start", # t gain is x(5xlvl)^2 and then gets divided by t^0.5 (min 1x)
             "weaker inflation", # add x1.1 (+0.1x/lvl) to asc cost exponent divider
         ],
         "cards values":[
             [BigNum(0), 0.04, "+"],
-            [BigNum(5), 5, "x"],
+            [BigNum(5), 5, "+"],
             [BigNum(1), 0.1, "+"]
         ],
         "proba": 0.04
@@ -712,24 +774,24 @@ cards = {
 }
 
 def draw(nb_draws=BigNum(1)):
-    global owned_cards,max_card_level
+    global owned_cards,max_card_level,nb_card_rarity
 
     if nb_draws>1000:
         mult=nb_draws/1000
-        nb_draws=1000
+        nb_draws=BigNum(1000)
     else:
         
         mult=1+(nb_draws.to_float()%1)/(nb_draws.to_float()//1)
 
     for _ in range(int(nb_draws.to_float()//1)): 
         r = seed.random()
-        for rarity in cards.values():
+        for rarity_name, rarity in cards.items():
             if r<=rarity["proba"]:
                 c = seed.randint(0,len(rarity["cards"])-1)
                 card = rarity["cards"][c]
                 card_value = rarity["cards values"][c]
                 if owned_cards[card]["lvl"]==0:
-                        nb_card_rarity[rarity]+=1
+                        nb_card_rarity[rarity_name]+=1
                 break
             else:
                 r-=rarity["proba"]
@@ -756,6 +818,14 @@ u2_rect = pygame.Rect(0, 216, 300, 20)
 u3_rect = pygame.Rect(0, 236, 300, 20)
 menu = 0
 running = True
+u3={
+    "value": BigNum(1),
+    "level": 0,
+    "cost": BigNum(2000),
+    "base": 1.1,
+    "asc": 0
+}
+reset()
 
 while running:
     mouse = pygame.mouse.get_pos()
@@ -823,20 +893,23 @@ while running:
                         u3["level"]+=1
                         m-=u3["cost"]
                         if owned_cards["base upgrading"]["lvl"]>0:
-                            u3["value"] = BigNum(u3["base"]+owned_cards["bigger base"]["value"]+(u3["level"]+u3["asc"]*100)**owned_cards["base upgrading"]["value"]/25)**(u3["level"]*2**u3["asc"])
+                            u3["value"] = BigNum(u3["base"]+owned_cards["bigger base"]["value"]+(u3["level"]+u3["asc"]*100)**owned_cards["base upgrading"]["value"]/25)**(u3["level"]*(2*owned_cards["ascend more"]["value"])**u3["asc"])
                         else:
-                            u3["value"] = BigNum(u3["base"]+owned_cards["bigger base"]["value"])**(u3["level"]*2**u3["asc"])
-                        if u3["level"]<20 or u3["asc"]<1:
+                            u3["value"] = BigNum(u3["base"]+owned_cards["bigger base"]["value"])**(u3["level"]*(2*owned_cards["ascend more"]["value"])**u3["asc"])
+                        if u3["level"]<50 or u3["asc"]<1:
                             u3["cost"] = BigNum(2000) * BigNum(1.25)**(u3["level"]*(2*owned_cards["ascend more"]["value"])**u3["asc"])
                         else:
-                            u3["cost"] = BigNum(2000) * BigNum(1.25)**(u3["level"]*(1+(u3["level"]/20)**(u3["asc"]/(10*owned_cards["weaker inflation"]["value"])))**(u3["asc"]))
+                            u3["cost"] = BigNum(2000) * BigNum(1.25)**(u3["level"]*(1+(u3["level"]/50)**(u3["asc"]**2/(3*owned_cards["weaker inflation"]["value"])))**(u3["asc"]))
                         if buy_max == False:
                             break
 
                     if u3["level"]==100 and "asc" in unlocked:
                         u3["level"]=1
                         u3["asc"]+=1
-                        u3["value"] = BigNum(u3["base"])**(u3["level"]*(2*owned_cards["ascend more"]["value"])**u3["asc"])
+                        if owned_cards["base upgrading"]["lvl"]>0:
+                            u3["value"] = BigNum(u3["base"]+owned_cards["bigger base"]["value"]+(u3["level"]+u3["asc"]*100)**owned_cards["base upgrading"]["value"]/25)**((2*owned_cards["ascend more"]["value"])**u3["asc"])
+                        else:
+                            u3["value"] = BigNum(u3["base"]+owned_cards["bigger base"]["value"])**(u3["level"]*(2*owned_cards["ascend more"]["value"])**u3["asc"])
                         u3["cost"] = BigNum(2000) * BigNum(1.25)**(u3["level"]*5**u3["asc"])
     screen.fill(black)
     if menu == 0:
@@ -1018,7 +1091,7 @@ while running:
         if achievments == 12:
             screen.blit(font.render(f"objective: get a legendary", True, white), (300,0))
             screen.blit(font.render(f"reward: base card gain ^1.1", True, white), (300,30))
-            if nb_card_rarity["legendary"]==1:
+            if nb_card_rarity["legendary"]>=1:
                 screen.blit(font.render(f"press enter to get reward", True, white), (300,90))
                 if keys[pygame.K_RETURN]:
                     if not holding_enter:
@@ -1045,6 +1118,10 @@ while running:
             screen.blit(font.render(f"you need 1e20 m to prestige", True, white), (300,0))
         else:
             draw_gain = (max_m.log()/20)**draw_exponent*(1+owned_cards["deck builder"]["value"])*draw_mult
+            if draw_gain>100:
+                draw_gain=(draw_gain/100)**0.5*100
+            if draw_gain>1000:
+                draw_gain=(draw_gain/1000)**0.33*1000
             screen.blit(font.render(f"you can prestige for {draw_gain} draws", True, white), (300,0))
             screen.blit(font.render(f"press enter to get prestige", True, white), (300,30))
             if keys[pygame.K_RETURN]:
@@ -1072,53 +1149,51 @@ while running:
                 draws-=1
                 last_drawn_card=draw()
                 holding_enter = True
-        if keys[pygame.K_m] and draws>=1 and "draw max" in unlocked:
-            if not holding_enter:
-                last_drawn_card=draw(draws)
-                draws=0
-                holding_enter = True
         else:
             holding_enter = False
+        if keys[pygame.K_m] and draws>=1 and "draw max" in unlocked:
+                last_drawn_card=draw(draws)
+                draws=0
         #cards (common)
         if owned_cards["wait faster"]["lvl"]>0:
-            screen.blit(font.render(f"wait faster(lvl:{owned_cards["wait faster"]["lvl"]}, {owned_cards["wait faster"]["exp"]}/{level_up_requirement[owned_cards["wait faster"]["lvl"]]}): t +^{owned_cards["wait faster"]["value"]}", True, grey), (0,50))
+            screen.blit(font.render(f"wait faster(lvl:{owned_cards["wait faster"]["lvl"]}, {owned_cards["wait faster"]["exp"]}/{level_up_requirement[owned_cards["wait faster"]["lvl"]%10]+BigNum(50)**(owned_cards["wait faster"]["lvl"]/10)}): t +^{owned_cards["wait faster"]["value"]}", True, grey), (0,50))
         if owned_cards["better power"]["lvl"]>0:
-            screen.blit(font.render(f"better power(lvl:{owned_cards["better power"]["lvl"]}, {owned_cards["better power"]["exp"]}/{level_up_requirement[owned_cards["better power"]["lvl"]]}): u1 +^{owned_cards["better power"]["value"]}", True, grey), (0,70))
+            screen.blit(font.render(f"better power(lvl:{owned_cards["better power"]["lvl"]}, {owned_cards["better power"]["exp"]}/{level_up_requirement[owned_cards["better power"]["lvl"]%10]+BigNum(50)**(owned_cards["better power"]["lvl"]/10)}): u1 +^{owned_cards["better power"]["value"]}", True, grey), (0,70))
         if owned_cards["ascend more"]["lvl"]>0:
-            screen.blit(font.render(f"ascend more(lvl:{owned_cards["ascend more"]["lvl"]}, {owned_cards["ascend more"]["exp"]}/{level_up_requirement[owned_cards["ascend more"]["lvl"]]}): ascension power x{owned_cards["ascend more"]["value"]}", True, grey), (0,90))
+            screen.blit(font.render(f"ascend more(lvl:{owned_cards["ascend more"]["lvl"]}, {owned_cards["ascend more"]["exp"]}/{level_up_requirement[owned_cards["ascend more"]["lvl"]%10]+BigNum(50)**(owned_cards["ascend more"]["lvl"]/10)}): ascension power x{owned_cards["ascend more"]["value"]}", True, grey), (0,90))
         #cards (uncommon)
         if owned_cards["faster scaling"]["lvl"]>0:
-            screen.blit(font.render(f"faster scaling(lvl:{owned_cards["faster scaling"]["lvl"]}, {owned_cards["faster scaling"]["exp"]}/{level_up_requirement[owned_cards["faster scaling"]["lvl"]]}): u2 mult/20levels +x{owned_cards["faster scaling"]["value"]} and ascension count as 100 levels now", True, green), (0,110))
+            screen.blit(font.render(f"faster scaling(lvl:{owned_cards["faster scaling"]["lvl"]}, {owned_cards["faster scaling"]["exp"]}/{level_up_requirement[owned_cards["faster scaling"]["lvl"]%10]+BigNum(50)**(owned_cards["faster scaling"]["lvl"]/10)}): u2 mult/20levels +x{owned_cards["faster scaling"]["value"]} and ascension count as 100 levels now", True, green), (0,110))
         if owned_cards["flat mult"]["lvl"]>0:
-            screen.blit(font.render(f"flat mult(lvl:{owned_cards["flat mult"]["lvl"]}, {owned_cards["flat mult"]["exp"]}/{level_up_requirement[owned_cards["flat mult"]["lvl"]]}): m+ x{owned_cards["flat mult"]["value"]**owned_cards["flat mult"]["lvl"]}", True, green), (0,130))
+            screen.blit(font.render(f"flat mult(lvl:{owned_cards["flat mult"]["lvl"]}, {owned_cards["flat mult"]["exp"]}/{level_up_requirement[owned_cards["flat mult"]["lvl"]%10]+BigNum(50)**(owned_cards["flat mult"]["lvl"]/10)}): m+ x{owned_cards["flat mult"]["value"]**owned_cards["flat mult"]["lvl"]}", True, green), (0,130))
         if owned_cards["time acceleration"]["lvl"]>0:
-            screen.blit(font.render(f"time acceleration(lvl:{owned_cards["time acceleration"]["lvl"]}, {owned_cards["time acceleration"]["exp"]}/{level_up_requirement[owned_cards["time acceleration"]["lvl"]]}): t gain increases by +{owned_cards["time acceleration"]["value"]}/sec", True, green), (0,150))
+            screen.blit(font.render(f"time acceleration(lvl:{owned_cards["time acceleration"]["lvl"]}, {owned_cards["time acceleration"]["exp"]}/{level_up_requirement[owned_cards["time acceleration"]["lvl"]%10]+BigNum(50)**(owned_cards["time acceleration"]["lvl"]/10)}): t gain increases by +{owned_cards["time acceleration"]["value"]}/sec", True, green), (0,150))
         #cards (rare)
         if owned_cards["bigger base"]["lvl"]>0:
-            screen.blit(font.render(f"bigger base(lvl:{owned_cards["bigger base"]["lvl"]}, {owned_cards["bigger base"]["exp"]}/{level_up_requirement[owned_cards["bigger base"]["lvl"]]}): u3 base +{owned_cards["bigger base"]["value"]}", True, blue), (0,170))
+            screen.blit(font.render(f"bigger base(lvl:{owned_cards["bigger base"]["lvl"]}, {owned_cards["bigger base"]["exp"]}/{level_up_requirement[owned_cards["bigger base"]["lvl"]%10]+BigNum(50)**(owned_cards["bigger base"]["lvl"]/10)}): u3 base +{owned_cards["bigger base"]["value"]}", True, blue), (0,170))
         if owned_cards["deck builder"]["lvl"]>0:
-            screen.blit(font.render(f"deck builder(lvl:{owned_cards["deck builder"]["lvl"]}, {owned_cards["deck builder"]["exp"]}/{level_up_requirement[owned_cards["deck builder"]["lvl"]]}): +x{owned_cards["deck builder"]["value"]} draws", True, blue), (0,190))
+            screen.blit(font.render(f"deck builder(lvl:{owned_cards["deck builder"]["lvl"]}, {owned_cards["deck builder"]["exp"]}/{level_up_requirement[owned_cards["deck builder"]["lvl"]%10]+BigNum(50)**(owned_cards["deck builder"]["lvl"]/10)}): +x{owned_cards["deck builder"]["value"]} draws", True, blue), (0,190))
         if owned_cards["time ascension"]["lvl"]>0:
-            screen.blit(font.render(f"time ascension(lvl:{owned_cards["time ascension"]["lvl"]}, {owned_cards["time ascension"]["exp"]}/{level_up_requirement[owned_cards["time ascension"]["lvl"]]}): when t reaches 10x(asc+1)^3 t exponent x{owned_cards["time ascension"]["value"]}", True, blue), (0,210))
+            screen.blit(font.render(f"time ascension(lvl:{owned_cards["time ascension"]["lvl"]}, {owned_cards["time ascension"]["exp"]}/{level_up_requirement[owned_cards["time ascension"]["lvl"]%10]+BigNum(50)**(owned_cards["time ascension"]["lvl"]/10)}): when t reaches 10x(asc+1)^3x1.5^asc t exponent x{owned_cards["time ascension"]["value"]}", True, blue), (0,210))
         #cards (epic)
         if owned_cards["exponential gain"]["lvl"]>0:
-            screen.blit(font.render(f"exponential gain(lvl:{owned_cards["exponential gain"]["lvl"]}, {owned_cards["exponential gain"]["exp"]}/{level_up_requirement[owned_cards["exponential gain"]["lvl"]]}): m+ +^{owned_cards["exponential gain"]["value"]}", True, magenta), (0,230))
+            screen.blit(font.render(f"exponential gain(lvl:{owned_cards["exponential gain"]["lvl"]}, {owned_cards["exponential gain"]["exp"]}/{level_up_requirement[owned_cards["exponential gain"]["lvl"]%10]+BigNum(50)**(owned_cards["exponential gain"]["lvl"]/10)}): m+ +^{owned_cards["exponential gain"]["value"]}", True, magenta), (0,230))
         if owned_cards["fast start"]["lvl"]>0:
-            screen.blit(font.render(f"fast start(lvl:{owned_cards["fast start"]["lvl"]}, {owned_cards["fast start"]["exp"]}/{level_up_requirement[owned_cards["fast start"]["lvl"]]}): t gain is now x{owned_cards["fast start"]["value"]} and then /t^0.5 (min x1)", True, magenta), (0,250))
+            screen.blit(font.render(f"fast start(lvl:{owned_cards["fast start"]["lvl"]}, {owned_cards["fast start"]["exp"]}/{level_up_requirement[owned_cards["fast start"]["lvl"]%10]+BigNum(50)**(owned_cards["fast start"]["lvl"]/10)}): t gain is now x{owned_cards["fast start"]["value"]} and then /t^0.5 (min x1)", True, magenta), (0,250))
         if owned_cards["weaker inflation"]["lvl"]>0:
-            screen.blit(font.render(f"weaker inflation(lvl:{owned_cards["weaker inflation"]["lvl"]}, {owned_cards["weaker inflation"]["exp"]}/{level_up_requirement[owned_cards["weaker inflation"]["lvl"]]}): x{owned_cards["time ascension"]["value"]} to ascension cost exponent divider", True, magenta), (0,270))
+            screen.blit(font.render(f"weaker inflation(lvl:{owned_cards["weaker inflation"]["lvl"]}, {owned_cards["weaker inflation"]["exp"]}/{level_up_requirement[owned_cards["weaker inflation"]["lvl"]%10]+BigNum(50)**(owned_cards["weaker inflation"]["lvl"]/10)}): x{owned_cards["time ascension"]["value"]} to ascension cost exponent divider", True, magenta), (0,270))
         #cards (legendary)
         if owned_cards["exponential ascension"]["lvl"]>0:
-            screen.blit(font.render(f"exponential ascension(lvl:{owned_cards["exponential ascension"]["lvl"]}, {owned_cards["exponential ascension"]["exp"]}/{level_up_requirement[owned_cards["exponential ascension"]["lvl"]]}): u1 +^{owned_cards["exponential ascension"]["value"]}/ascensions", True, orange), (0,290))
+            screen.blit(font.render(f"exponential ascension(lvl:{owned_cards["exponential ascension"]["lvl"]}, {owned_cards["exponential ascension"]["exp"]}/{level_up_requirement[owned_cards["exponential ascension"]["lvl"]%10]+BigNum(50)**(owned_cards["exponential ascension"]["lvl"]/10)}): u1 +^{owned_cards["exponential ascension"]["value"]}/ascensions", True, orange), (0,290))
         if owned_cards["crazy scaling"]["lvl"]>0:
-            screen.blit(font.render(f"crazy scaling(lvl:{owned_cards["crazy scaling"]["lvl"]}, {owned_cards["crazy scaling"]["exp"]}/{level_up_requirement[owned_cards["crazy scaling"]["lvl"]]}): u2 mult/20levels is now multiplicative but ^{owned_cards["crazy scaling"]["value"]} ascensions are worth 100 levels now", True, orange), (0,310))
+            screen.blit(font.render(f"crazy scaling(lvl:{owned_cards["crazy scaling"]["lvl"]}, {owned_cards["crazy scaling"]["exp"]}/{level_up_requirement[owned_cards["crazy scaling"]["lvl"]%10]+BigNum(50)**(owned_cards["crazy scaling"]["lvl"]/10)}): u2 mult/20levels is now multiplicative but ^{owned_cards["crazy scaling"]["value"]}", True, orange), (0,310))
         if owned_cards["base upgrading"]["lvl"]>0:
-            screen.blit(font.render(f"base upgrading(lvl:{owned_cards["base upgrading"]["lvl"]}, {owned_cards["base upgrading"]["exp"]}/{level_up_requirement[owned_cards["base upgrading"]["lvl"]]}): u3 base +(u3 level)^{owned_cards["base upgrading"]["value"]}/25, ascension are worth 100 levels", True, orange), (0,330))
+            screen.blit(font.render(f"base upgrading(lvl:{owned_cards["base upgrading"]["lvl"]}, {owned_cards["base upgrading"]["exp"]}/{level_up_requirement[owned_cards["base upgrading"]["lvl"]%10]+BigNum(50)**(owned_cards["base upgrading"]["lvl"]/10)}): u3 base +(u3 level)^{owned_cards["base upgrading"]["value"]}/25, ascension are worth 100 levels", True, orange), (0,330))
                 
     if "t" in unlocked:
-        t["value"]+=t["gain"]*max(owned_cards["fast start"]["value"]/t["value"]**0.5,1)/fps
+        t["value"]+=t["gain"]*max(owned_cards["fast start"]["value"]**2/t["value"]**0.5,1)/fps
         t["gain"]+=owned_cards["time acceleration"]["value"]/fps
-        if owned_cards["time ascension"]["lvl"]>0 and t["value"]>10*(t["asc"]+1)**3:
+        if owned_cards["time ascension"]["lvl"]>0 and t["value"]>10*(t["asc"]+1)**3*1.5**t["asc"]:
             t["value"]=BigNum(1)
             t["asc"]+=1
     m_inc = ((u1["value"])**(u1["exp"]+owned_cards["better power"]["value"]+owned_cards["exponential ascension"]["value"]*u1["asc"])*u2["value"]*(t["value"]**((t["exp"]+owned_cards["wait faster"]["value"])*owned_cards["time ascension"]["value"]**t["asc"]))*u3["value"]*owned_cards["flat mult"]["value"])**(1+owned_cards["exponential gain"]["value"])
